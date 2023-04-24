@@ -1,0 +1,82 @@
+create or replace PACKAGE BODY CH003_MARCACION IS
+  -- PRIVATE TYPE DECLARATIONS
+  PROCEDURE PP_INSERTAR_MARCACION(I_CLAVE IN NUMBER, I_TIPO IN VARCHAR2) AS
+    V_CLAVE_MARC NUMBER := 0;
+    V_CLAVE_PER  NUMBER := 0;
+  BEGIN
+    /*OBTEBEMOS LA CLAVE DE LA MARCACION DESDE UNA SECUENCIA*/
+    SELECT SEQ_MARCACION.NEXTVAL INTO V_CLAVE_MARC FROM DUAL;
+    /*BUSCAMOS LA CLAVE DE LA PERSONA A PARTIR DE SU CI*/
+    BEGIN
+      SELECT P.PER_CLAVE
+        INTO V_CLAVE_PER
+        FROM CAP_PERSONAS P
+       WHERE P.PER_CI = I_CLAVE;
+    EXCEPTION
+      WHEN NO_DATA_FOUND THEN
+        RAISE_APPLICATION_ERROR(-20001,
+                                'Error, La clave ingresada no es correcta, por favor, verifíque!!.');
+    END;
+    INSERT INTO CAP_MARCACION
+      (MAR_CLAVE, MAR_PERSONA, MAR_HORA_MAR, MAR_TIPO)
+    VALUES
+      (V_CLAVE_MARC, V_CLAVE_PER, current_timestamp, I_TIPO);
+    COMMIT;
+  END;
+  PROCEDURE PP_CONSULTAR_VOLUNTARIO(I_CI     IN NUMBER,
+                                    I_NOMBRE OUT VARCHAR2,
+                                    O_TIPO   OUT VARCHAR2) AS
+    V_CLAVE NUMBER;
+  BEGIN
+    SELECT P.PER_NOMBRE || ' ' || p.per_apellido, P.PER_CLAVE
+      INTO I_NOMBRE, V_CLAVE
+      FROM CAP_PERSONAS P
+     WHERE P.PER_CI = I_CI;
+  
+    SELECT DECODE(M.MAR_TIPO, 'E', 'S', 'E')
+      INTO O_TIPO
+      FROM CAP_MARCACION M
+     WHERE M.MAR_PERSONA = V_CLAVE
+       AND M.MAR_HORA_MAR =
+           (SELECT MAX(C.MAR_HORA_MAR)
+              FROM CAP_MARCACION C
+             WHERE C.MAR_PERSONA = V_CLAVE);
+  EXCEPTION
+    WHEN others THEN
+      I_NOMBRE := I_NOMBRE;
+      O_TIPO   := 'E';
+  END;
+  PROCEDURE PP_CERRAR_MARCACION AS
+    V_TIPO       VARCHAR2(1);
+    V_CLAVE_MARC NUMBER := 0;
+    V_HORA       NUMBER := 0;
+  BEGIN
+    FOR I IN (SELECT * FROM CAP_PERSONAS P WHERE P.PER_ESTADO NOT IN ('I')) LOOP
+      BEGIN
+        SELECT M.MAR_TIPO,
+               24 * (to_date(sysdate, 'DD-MM-YYYY hh24:mi') -
+               to_date(MAR_HORA_MAR, 'DD-MM-YYYY hh24:mi')) diff_hours
+          INTO V_TIPO, V_HORA
+          FROM CAP_MARCACION M
+         WHERE M.MAR_PERSONA = I.PER_CLAVE
+           AND M.MAR_HORA_MAR =
+               (SELECT MAX(C.MAR_HORA_MAR)
+                  FROM CAP_MARCACION C
+                 WHERE C.MAR_PERSONA = I.PER_CLAVE);
+      EXCEPTION
+        WHEN OTHERS THEN
+          NULL;
+      END;
+      IF V_TIPO = 'E' AND V_HORA > 11 THEN
+        SELECT SEQ_MARCACION.NEXTVAL INTO V_CLAVE_MARC FROM DUAL;
+        INSERT INTO CAP_MARCACION
+          (MAR_CLAVE, MAR_PERSONA, MAR_HORA_MAR, MAR_TIPO)
+        VALUES
+          (V_CLAVE_MARC, I.PER_CLAVE, SYSDATE, 'S');
+        COMMIT;
+        V_HORA:=0;
+      END IF;
+    END LOOP;
+  END;
+END CH003_MARCACION;
+/

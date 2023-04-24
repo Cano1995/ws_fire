@@ -1,0 +1,24 @@
+
+  CREATE TABLE "CAP_CALIFICACION" 
+   (	"CAL_CLAVE" NUMBER NOT NULL ENABLE, 
+	"CAL_PERSONA" NUMBER, 
+	"CAL_FECHA" DATE, 
+	"CAL_OBSERVACION" VARCHAR2(250), 
+	"CAL_USER" VARCHAR2(8), 
+	 CONSTRAINT "PK_CLAVE_CAL" PRIMARY KEY ("CAL_CLAVE")
+  USING INDEX  ENABLE
+   ) ;
+
+  CREATE OR REPLACE EDITIONABLE TRIGGER "TR_CALIFICACION_BI" 
+  before insert
+  on CAP_CALIFICACION 
+  for each row
+declare
+  -- local variables here
+begin
+    select SEQ_CAP_CALIFICACION.nextval into :NEW.CAL_CLAVE from sys.dual; 
+    :new.cal_user := GEN_DEVUELVE_USER;
+end tr_calificacion_bi;
+
+/
+ALTER TRIGGER "TR_CALIFICACION_BI" ENABLE;
